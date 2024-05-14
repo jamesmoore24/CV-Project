@@ -93,7 +93,6 @@ for image_file in os.listdir(image_dir):
         output_path = os.path.join(output_dir, image_file)
         cv2.imwrite(output_path, cv2.cvtColor(stick_figure_image, cv2.COLOR_RGB2BGR))
 
-
 # Directory paths
 image_dir = './leg-hip-annotations/images'
 source_dir = './leg-hip-annotations/source'
@@ -108,10 +107,14 @@ for image_file in os.listdir(image_dir):
         source_path = os.path.join(source_dir, image_file)
         target_path = os.path.join(image_dir, image_file)
 
+        # Create relative paths to drop the './leg-hip-annotations/' prefix
+        relative_source_path = os.path.relpath(source_path, start='./leg-hip-annotations')
+        relative_target_path = os.path.relpath(target_path, start='./leg-hip-annotations')
+
         # Create a dictionary for the JSON object
         json_object = {
-            "source": source_path,
-            "target": target_path,
+            "source": relative_source_path,
+            "target": relative_target_path,
             "prompt": "an x-ray of the legs and hips from the frontal perspective"
         }
 
@@ -122,7 +125,7 @@ for image_file in os.listdir(image_dir):
 json_output = json.dumps(json_list, indent=4)
 
 # Save the JSON formatted string to a file
-output_file = './leg-hip-annotations/output.json'
+output_file = './leg-hip-annotations/prompt.json'
 with open(output_file, 'w') as f:
     f.write(json_output)
 
