@@ -1,6 +1,5 @@
 import pandas as pd
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import json
@@ -21,6 +20,67 @@ df = pd.read_csv(csv_file, header=None)
 
 # Manually set the column names
 df.columns = ['label', 'x', 'y', 'file', 'width', 'height']
+
+def adjust_coordinates(x, y, original_dim, target_dim):
+    """
+    Adjust coordinates from original dimensions to target dimensions.
+    """
+    original_width, original_height = original_dim
+    target_width, target_height = target_dim
+    new_x = int(x * target_width / original_width)
+    new_y = int(y * target_height / original_height)
+    return new_x, new_y
+
+def rotate_and_adjust_coordinates(annotations, original_dim, target_dim):
+    """
+    Rotate coordinates 90 degrees clockwise and adjust from original dimensions to target dimensions.
+    """
+    original_width, original_height = original_dim
+    target_width, target_height = target_dim
+
+    rotated_coords = annotations.copy()
+    rotated_coords['x'] = annotations['y'].apply(lambda y: target_width - adjust_coordinates(0, y, (original_height, original_width), target_dim)[1])
+    rotated_coords['y'] = annotations['x'].apply(lambda x: adjust_coordinates(x, 0, (original_width, original_height), target_dim)[0])
+
+    return rotated_coords
+
+def process_image(image_path, annotations, image_output_dir, stick_figure_output_dir):
+    # Load the image
+    image = cv2.imread(image_path)
+    height, width = image.shape[:2]
+
+    # Check the dimensions and rotate if necessary
+    if width == 373 and height == 454:
+        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        annotations = rotate_and_adjust_coordinates(annotations, (454, 373), (373, 454))
+        height, width = width, height
+
+    # Rotate and rescale coordinates for images with dimensions 2880x2304
+    if width == 2304 and height == 2880:
+        original_dim = (2304, 2880)
+        target_dim = (454, 373)
+
+        # Rotate the image
+        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+
+        # Rescale the image
+        image = cv2.resize(image, target_dim)
+
+        # Adjust the coordinates
+        annotations = rotate_and_adjust_coordinates(annotations, original_dim, target_dim)
+
+        height, width = target_dim
+
+    # Save the processed (resized and/or rotated) image
+    processed_image_path = os.path.join(image_output_dir, os.path.basename(image_path))
+    cv2.imwrite(processed_image_path, image)
+
+    # Draw the stick figure
+    stick_figure = draw_stick_figure(image, annotations)
+
+    # Save the stick figure image
+    stick_figure_image_path = os.path.join(stick_figure_output_dir, os.path.basename(image_path))
+    cv2.imwrite(stick_figure_image_path, stick_figure)
 
 def draw_stick_figure(image, df):
     # Create a black image with the same dimensions as the original image
@@ -57,6 +117,21 @@ def draw_stick_figure(image, df):
         cv2.circle(img, (x, y), point_size, color, -1)
 
     return img
+
+# Ensure the output directories exist
+image_output_dir = './leg-hip-annotations/new_images'
+stick_figure_output_dir = './leg-hip-annotations/new_stick_figures'
+os.makedirs(image_output_dir, exist_ok=True)
+os.makedirs(stick_figure_output_dir, exist_ok=True)
+
+# Process all images
+images_dir = './leg-hip-annotations/target'
+for file in os.listdir(images_dir):
+    if file.endswith('.jpg'):
+        image_path = os.path.join(images_dir, file)
+        annotations = df[df['file'] == file].copy()
+        process_image(image_path, annotations, image_output_dir, stick_figure_output_dir)
+
 
 # Directory paths
 image_dir = './leg-hip-annotations/target'
