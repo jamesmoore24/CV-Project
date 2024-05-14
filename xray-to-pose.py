@@ -103,17 +103,50 @@ def process_image(image_path, annotations, image_output_dir, stick_figure_output
     # Crop the image and annotations
     image_cropped = image[min_y:max_y, min_x:max_x]
     stick_figure_image_cropped = stick_figure_image[min_y:max_y, min_x:max_x]
-    
+
     #resize the images
     image_resized = cv2.resize(image_cropped, (256, 256))
     stick_figure_image_resized = cv2.resize(stick_figure_image_cropped, (256, 256))
 
-    # Save the resized images
-    processed_image_path = os.path.join(image_output_dir, os.path.basename(image_path))
-    cv2.imwrite(processed_image_path, image_resized)
+    def rotate_image(image, angle):
+        """
+        Rotate image by the given angle.
+        """
+        if angle == 90:
+            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        elif angle == 180:
+            return cv2.rotate(image, cv2.ROTATE_180)
+        elif angle == 270:
+            return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        else:
+            return image
+    
+    # Save rotated and blurred images
+    for angle in [0, 90, 180, 270]:
+        # Rotate images
+        image_rotated = rotate_image(image_resized, angle)
+        stick_figure_image_rotated = rotate_image(stick_figure_image_resized, angle)
 
-    stick_figure_image_path = os.path.join(stick_figure_output_dir, os.path.basename(image_path))
-    cv2.imwrite(stick_figure_image_path, stick_figure_image_resized)
+        # Save rotated images
+        processed_image_rotated_path = os.path.join(image_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}.jpg")
+        stick_figure_image_rotated_path = os.path.join(stick_figure_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}.jpg")
+        cv2.imwrite(processed_image_rotated_path, image_rotated)
+        cv2.imwrite(stick_figure_image_rotated_path, stick_figure_image_rotated)
+
+        # Apply motion blur
+        kernel_size = 15
+        kernel_motion_blur = np.zeros((kernel_size, kernel_size))
+        kernel_motion_blur[int((kernel_size-1)/2), :] = np.ones(kernel_size)
+        kernel_motion_blur = kernel_motion_blur / kernel_size
+
+        stick_figure_image_blurred = cv2.filter2D(stick_figure_image_rotated, -1, kernel_motion_blur)
+
+        # Save blurred images
+        processed_image_blurred_path = os.path.join(image_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}_blur.jpg")
+        stick_figure_image_blurred_path = os.path.join(stick_figure_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}_blur.jpg")
+        # blurred posemap should still map to same image
+        cv2.imwrite(processed_image_blurred_path, image_rotated)
+        cv2.imwrite(stick_figure_image_blurred_path, stick_figure_image_blurred)
 
 
 def draw_stick_figure(image, df):
@@ -189,40 +222,6 @@ def overlay_stick_figure_on_original(image, df):
     return img
 
 
-# Ensure the output directories exist
-image_output_dir = './leg-hip-annotations/target'
-stick_figure_output_dir = './leg-hip-annotations/source'
-stick_figure_original_output_dir = './stick_figures_original'
-os.makedirs(image_output_dir, exist_ok=True)
-os.makedirs(stick_figure_output_dir, exist_ok=True)
-os.makedirs(stick_figure_original_output_dir, exist_ok=True)
-
-# Initialize JSON list
-json_list = []
-
-# Process all images
-images_dir = './original_images'
-for file in os.listdir(images_dir):
-    if file.endswith('.jpg') or file.endswith('.png'):
-        image_path = os.path.join(images_dir, file)
-        annotations = df[df['file'] == file].copy()
-        process_image(image_path, annotations, image_output_dir, stick_figure_output_dir, stick_figure_original_output_dir)
-
-        # Create relative paths to drop the './leg-hip-annotations/' prefix
-        relative_source_path = os.path.relpath(os.path.join(stick_figure_output_dir, file), start='./leg-hip-annotations')
-        relative_target_path = os.path.relpath(os.path.join(image_output_dir, file), start='./leg-hip-annotations')
-
-        # Create a dictionary for the JSON object
-        json_object = {
-            "source": relative_source_path,
-            "target": relative_target_path,
-            "prompt": "an x-ray of the legs and hips from the frontal perspective"
-        }
-
-        # Add the JSON object to the list
-        json_list.append(json_object)
-
-
 #Test suite
 def check_square_images(directory):
     """
@@ -242,6 +241,16 @@ def check_square_images(directory):
                 print(f"Image {file} is not square: {width}x{height}")
     return all_square
 
+def count_images(directory):
+    """
+    Count the number of images in the given directory.
+    """
+    count = 0
+    for file in os.listdir(directory):
+        if file.endswith('.jpg') or file.endswith('.png'):
+            count += 1
+    return count
+
 # Define the directories to check
 source_dir = './leg-hip-annotations/source'
 target_dir = './leg-hip-annotations/target'
@@ -260,6 +269,53 @@ if source_all_square and target_all_square:
 else:
     print("\nNot all images in the source and/or target directories are square.")
 
+# Count images in both directories
+source_image_count = count_images(source_dir)
+target_image_count = count_images(target_dir)
+
+# Print results
+print(f"\nNumber of images in source directory: {source_image_count}")
+print(f"Number of images in target directory: {target_image_count}")
+
+if source_all_square and target_all_square:
+    print("\nAll images in both source and target directories are square and 256x256.")
+else:
+    print("\nNot all images in the source and/or target directories are square and 256x256.")
+
+if source_image_count == target_image_count:
+    print("Both directories have the same number of images.")
+else:
+    print("The directories do not have the same number of images.")
+
+# Ensure the output directories exist
+image_output_dir = './leg-hip-annotations/target'
+stick_figure_output_dir = './leg-hip-annotations/source'
+stick_figure_original_output_dir = './stick_figures_original'
+os.makedirs(image_output_dir, exist_ok=True)
+os.makedirs(stick_figure_output_dir, exist_ok=True)
+os.makedirs(stick_figure_original_output_dir, exist_ok=True)
+
+# Initialize JSON list
+json_list = []
+
+# Process all images
+images_dir = 'leg-hip-annotations/source'
+for file in os.listdir(images_dir):
+    if file.endswith('.jpg') or file.endswith('.png'):
+        
+        # Create relative paths to drop the './leg-hip-annotations/' prefix
+        relative_source_path = os.path.relpath(os.path.join(stick_figure_output_dir, file), start='./leg-hip-annotations')
+        relative_target_path = os.path.relpath(os.path.join(image_output_dir, file), start='./leg-hip-annotations')
+
+        # Create a dictionary for the JSON object
+        json_object = {
+            "source": relative_source_path,
+            "target": relative_target_path,
+            "prompt": "an x-ray of the legs and hips from the frontal perspective"
+        }
+
+        # Add the JSON object to the list
+        json_list.append(json_object)
 
 # Convert the list to a JSON formatted string
 json_output = json.dumps(json_list, indent=4)
