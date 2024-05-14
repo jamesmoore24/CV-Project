@@ -3,6 +3,15 @@ import cv2
 import numpy as np
 import os
 import json
+import random
+
+# Ensure the output directories exist
+image_output_dir = './leg-hip-annotations/target'
+stick_figure_output_dir = './leg-hip-annotations/source'
+stick_figure_original_output_dir = './stick_figures_original'
+os.makedirs(image_output_dir, exist_ok=True)
+os.makedirs(stick_figure_output_dir, exist_ok=True)
+os.makedirs(stick_figure_original_output_dir, exist_ok=True)
 
 # Define a color map for each label
 color_map = {
@@ -62,7 +71,6 @@ def process_image(image_path, annotations, image_output_dir, stick_figure_output
     min_x, min_y = annotations[['x', 'y']].min() - margin
     max_x, max_y = annotations[['x', 'y']].max() + margin
 
-
     # Calculate the crop box ensuring a 1:1 aspect ratio
     crop_width = max_x - min_x
     crop_height = max_y - min_y
@@ -71,7 +79,7 @@ def process_image(image_path, annotations, image_output_dir, stick_figure_output
         diff1 = diff // 2
         diff2 = diff - diff1
         min_y = min_y - diff1
-        max_y =max_y + diff2
+        max_y = max_y + diff2
         crop_height = max_y - min_y
     else:
         diff = crop_height - crop_width
@@ -98,13 +106,12 @@ def process_image(image_path, annotations, image_output_dir, stick_figure_output
     max_x += left_pad
     min_y += top_pad
     max_y += top_pad
-    
 
     # Crop the image and annotations
     image_cropped = image[min_y:max_y, min_x:max_x]
     stick_figure_image_cropped = stick_figure_image[min_y:max_y, min_x:max_x]
 
-    #resize the images
+    # Resize the images
     image_resized = cv2.resize(image_cropped, (256, 256))
     stick_figure_image_resized = cv2.resize(stick_figure_image_cropped, (256, 256))
 
@@ -148,7 +155,6 @@ def process_image(image_path, annotations, image_output_dir, stick_figure_output
         cv2.imwrite(processed_image_blurred_path, image_rotated)
         cv2.imwrite(stick_figure_image_blurred_path, stick_figure_image_blurred)
 
-
 def draw_stick_figure(image, df):
     # Create a black image with the same dimensions as the original image
     img = np.zeros_like(image)
@@ -166,17 +172,25 @@ def draw_stick_figure(image, df):
         y = int(row['y'])
         coords[label] = (x, y)
 
-    # Draw the connections based on the specified rules
+    line_colors = {
+        ('left hip socket', 'left knee'): (0, 255, 255),    # Cyan
+        ('left hip socket', 'hip'): (128, 0, 128),          # Purple
+        ('right hip socket', 'right knee'): (255, 20, 147), # Deep Pink
+        ('right hip socket', 'hip'): (75, 0, 130),          # Indigo
+        ('hip', 'spine'): (0, 128, 128)                     # Teal
+    }
+
+    # Draw the connections based on the specified rules with unique colors
     if 'left hip socket' in coords and 'left knee' in coords:
-        cv2.line(img, coords['left hip socket'], coords['left knee'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['left hip socket'], coords['left knee'], line_colors[('left hip socket', 'left knee')], line_weight)
     if 'left hip socket' in coords and 'hip' in coords:
-        cv2.line(img, coords['left hip socket'], coords['hip'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['left hip socket'], coords['hip'], line_colors[('left hip socket', 'hip')], line_weight)
     if 'right hip socket' in coords and 'right knee' in coords:
-        cv2.line(img, coords['right hip socket'], coords['right knee'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['right hip socket'], coords['right knee'], line_colors[('right hip socket', 'right knee')], line_weight)
     if 'right hip socket' in coords and 'hip' in coords:
-        cv2.line(img, coords['right hip socket'], coords['hip'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['right hip socket'], coords['hip'], line_colors[('right hip socket', 'hip')], line_weight)
     if 'hip' in coords and 'spine' in coords:
-        cv2.line(img, coords['hip'], coords['spine'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['hip'], coords['spine'], line_colors[('hip', 'spine')], line_weight)
 
     # Draw the joints
     for label, (x, y) in coords.items():
@@ -202,17 +216,25 @@ def overlay_stick_figure_on_original(image, df):
         y = int(row['y'])
         coords[label] = (x, y)
 
-    # Draw the connections based on the specified rules
+    line_colors = {
+        ('left hip socket', 'left knee'): (0, 255, 255),    # Cyan
+        ('left hip socket', 'hip'): (128, 0, 128),          # Purple
+        ('right hip socket', 'right knee'): (255, 20, 147), # Deep Pink
+        ('right hip socket', 'hip'): (75, 0, 130),          # Indigo
+        ('hip', 'spine'): (0, 128, 128)                     # Teal
+    }
+
+    # Draw the connections based on the specified rules with unique colors
     if 'left hip socket' in coords and 'left knee' in coords:
-        cv2.line(img, coords['left hip socket'], coords['left knee'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['left hip socket'], coords['left knee'], line_colors[('left hip socket', 'left knee')], line_weight)
     if 'left hip socket' in coords and 'hip' in coords:
-        cv2.line(img, coords['left hip socket'], coords['hip'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['left hip socket'], coords['hip'], line_colors[('left hip socket', 'hip')], line_weight)
     if 'right hip socket' in coords and 'right knee' in coords:
-        cv2.line(img, coords['right hip socket'], coords['right knee'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['right hip socket'], coords['right knee'], line_colors[('right hip socket', 'right knee')], line_weight)
     if 'right hip socket' in coords and 'hip' in coords:
-        cv2.line(img, coords['right hip socket'], coords['hip'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['right hip socket'], coords['hip'], line_colors[('right hip socket', 'hip')], line_weight)
     if 'hip' in coords and 'spine' in coords:
-        cv2.line(img, coords['hip'], coords['spine'], (255, 255, 255), line_weight)
+        cv2.line(img, coords['hip'], coords['spine'], line_colors[('hip', 'spine')], line_weight)
 
     # Draw the joints
     for label, (x, y) in coords.items():
@@ -221,8 +243,7 @@ def overlay_stick_figure_on_original(image, df):
 
     return img
 
-
-#Test suite
+# Test suite
 def check_square_images(directory):
     """
     Check if all images in the given directory are square.
@@ -251,67 +272,31 @@ def count_images(directory):
             count += 1
     return count
 
-# Define the directories to check
-source_dir = './leg-hip-annotations/source'
-target_dir = './leg-hip-annotations/target'
-
-# Check if all images in the source directory are square
-print("Checking source directory...")
-source_all_square = check_square_images(source_dir)
-
-# Check if all images in the target directory are square
-print("\nChecking target directory...")
-target_all_square = check_square_images(target_dir)
-
-# Overall result
-if source_all_square and target_all_square:
-    print("\nAll images in both source and target directories are (256, 256)")
-else:
-    print("\nNot all images in the source and/or target directories are square.")
-
-# Count images in both directories
-source_image_count = count_images(source_dir)
-target_image_count = count_images(target_dir)
-
-# Print results
-print(f"\nNumber of images in source directory: {source_image_count}")
-print(f"Number of images in target directory: {target_image_count}")
-
-if source_all_square and target_all_square:
-    print("\nAll images in both source and target directories are square and 256x256.")
-else:
-    print("\nNot all images in the source and/or target directories are square and 256x256.")
-
-if source_image_count == target_image_count:
-    print("Both directories have the same number of images.")
-else:
-    print("The directories do not have the same number of images.")
-
-# Ensure the output directories exist
-image_output_dir = './leg-hip-annotations/target'
-stick_figure_output_dir = './leg-hip-annotations/source'
-stick_figure_original_output_dir = './stick_figures_original'
-os.makedirs(image_output_dir, exist_ok=True)
-os.makedirs(stick_figure_output_dir, exist_ok=True)
-os.makedirs(stick_figure_original_output_dir, exist_ok=True)
-
-# Initialize JSON list
 json_list = []
+
+prompts = [
+    "an x-ray of the legs and hips from the frontal perspective",
+    "an x-ray of the hips and legs from the frontal perspective",
+    "an x-ray of the hips and legs from the front view",
+    "x-ray of hips and legs from front perspective"
+]
 
 # Process all images
 images_dir = 'leg-hip-annotations/source'
 for file in os.listdir(images_dir):
     if file.endswith('.jpg') or file.endswith('.png'):
-        
         # Create relative paths to drop the './leg-hip-annotations/' prefix
         relative_source_path = os.path.relpath(os.path.join(stick_figure_output_dir, file), start='./leg-hip-annotations')
         relative_target_path = os.path.relpath(os.path.join(image_output_dir, file), start='./leg-hip-annotations')
+
+        # Randomly sample a prompt from the list
+        prompt = random.choice(prompts)
 
         # Create a dictionary for the JSON object
         json_object = {
             "source": relative_source_path,
             "target": relative_target_path,
-            "prompt": "an x-ray of the legs and hips from the frontal perspective"
+            "prompt": prompt
         }
 
         # Add the JSON object to the list
