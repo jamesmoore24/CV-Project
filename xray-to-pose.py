@@ -59,7 +59,7 @@ def draw_stick_figure(image, df):
     return img
 
 # Directory containing the images
-image_dir = './leg-hip-annotations/images'
+image_dir = './leg-hip-annotations/target'
 output_dir = './leg-hip-annotations/source'
 
 # Create output directory if it doesn't exist
@@ -94,7 +94,7 @@ for image_file in os.listdir(image_dir):
         cv2.imwrite(output_path, cv2.cvtColor(stick_figure_image, cv2.COLOR_RGB2BGR))
 
 # Directory paths
-image_dir = './leg-hip-annotations/images'
+image_dir = './leg-hip-annotations/target'
 source_dir = './leg-hip-annotations/source'
 
 # Initialize a list to hold the JSON objects
