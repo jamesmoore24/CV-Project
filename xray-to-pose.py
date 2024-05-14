@@ -15,7 +15,7 @@ color_map = {
 }
 
 # Load the CSV file without headers
-csv_file = './leg-hip-annotations/point_annotations.csv'
+csv_file = './point_annotations.csv'
 df = pd.read_csv(csv_file, header=None)
 
 # Manually set the column names
@@ -44,43 +44,77 @@ def rotate_and_adjust_coordinates(annotations, original_dim, target_dim):
 
     return rotated_coords
 
-def process_image(image_path, annotations, image_output_dir, stick_figure_output_dir):
+def process_image(image_path, annotations, image_output_dir, stick_figure_output_dir, stick_figure_original_output_dir):
     # Load the image
     image = cv2.imread(image_path)
     height, width = image.shape[:2]
 
-    # Check the dimensions and rotate if necessary
-    if width == 373 and height == 454:
-        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-        annotations = rotate_and_adjust_coordinates(annotations, (454, 373), (373, 454))
-        height, width = width, height
+    # Draw the stick figure on the original image and save
+    overlay_image = overlay_stick_figure_on_original(image, annotations)
+    stick_figure_original_image_path = os.path.join(stick_figure_original_output_dir, os.path.basename(image_path))
+    cv2.imwrite(stick_figure_original_image_path, overlay_image)
+        
+    # Draw stick figure for target image
+    stick_figure_image = draw_stick_figure(image, annotations)
 
-    # Rotate and rescale coordinates for images with dimensions 2880x2304
-    if width == 2304 and height == 2880:
-        original_dim = (2304, 2880)
-        target_dim = (454, 373)
+    # Calculate the bounding box containing all points with margin
+    margin = 50  # Adjust the margin as needed
+    min_x, min_y = annotations[['x', 'y']].min() - margin
+    max_x, max_y = annotations[['x', 'y']].max() + margin
 
-        # Rotate the image
-        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
 
-        # Rescale the image
-        image = cv2.resize(image, target_dim)
+    # Calculate the crop box ensuring a 1:1 aspect ratio
+    crop_width = max_x - min_x
+    crop_height = max_y - min_y
+    if crop_width > crop_height:
+        diff = crop_width - crop_height
+        diff1 = diff // 2
+        diff2 = diff - diff1
+        min_y = min_y - diff1
+        max_y =max_y + diff2
+        crop_height = max_y - min_y
+    else:
+        diff = crop_height - crop_width
+        diff1 = diff // 2
+        diff2 = diff - diff1
+        min_x = min_x - diff1
+        max_x = max_x + diff2
+        crop_width = max_x - min_x
+    
+    padding_margin = 50
+    # Calculate padding if the crop box exceeds image dimensions
+    top_pad = max(0, -min_y + padding_margin)
+    bottom_pad = max(0, max_y + padding_margin - height)
+    left_pad = max(0, -min_x + padding_margin)
+    right_pad = max(0, max_x + padding_margin - width)
 
-        # Adjust the coordinates
-        annotations = rotate_and_adjust_coordinates(annotations, original_dim, target_dim)
+    # Pad the image if necessary
+    if top_pad > 0 or bottom_pad > 0 or left_pad > 0 or right_pad > 0:
+        image = cv2.copyMakeBorder(image, top_pad, bottom_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        stick_figure_image = cv2.copyMakeBorder(stick_figure_image, top_pad, bottom_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        height, width = image.shape[:2]
 
-        height, width = target_dim
+    min_x += left_pad
+    max_x += left_pad
+    min_y += top_pad
+    max_y += top_pad
+    
 
-    # Save the processed (resized and/or rotated) image
+    # Crop the image and annotations
+    image_cropped = image[min_y:max_y, min_x:max_x]
+    stick_figure_image_cropped = stick_figure_image[min_y:max_y, min_x:max_x]
+    
+    #resize the images
+    image_resized = cv2.resize(image_cropped, (256, 256))
+    stick_figure_image_resized = cv2.resize(stick_figure_image_cropped, (256, 256))
+
+    # Save the resized images
     processed_image_path = os.path.join(image_output_dir, os.path.basename(image_path))
-    cv2.imwrite(processed_image_path, image)
+    cv2.imwrite(processed_image_path, image_resized)
 
-    # Draw the stick figure
-    stick_figure = draw_stick_figure(image, annotations)
-
-    # Save the stick figure image
     stick_figure_image_path = os.path.join(stick_figure_output_dir, os.path.basename(image_path))
-    cv2.imwrite(stick_figure_image_path, stick_figure)
+    cv2.imwrite(stick_figure_image_path, stick_figure_image_resized)
+
 
 def draw_stick_figure(image, df):
     # Create a black image with the same dimensions as the original image
@@ -118,71 +152,65 @@ def draw_stick_figure(image, df):
 
     return img
 
+def overlay_stick_figure_on_original(image, df):
+    # Create a copy of the original image
+    img = image.copy()
+    height, width, _ = image.shape
+
+    # Normalize line weight and point size
+    line_weight = int(min(height, width) * 0.02)  # Adjust this factor as needed
+    point_size = int(min(height, width) * 0.03)  # Adjust this factor as needed
+
+    # Create a dictionary to store coordinates by label
+    coords = {}
+    for index, row in df.iterrows():
+        label = row['label']
+        x = int(row['x'])
+        y = int(row['y'])
+        coords[label] = (x, y)
+
+    # Draw the connections based on the specified rules
+    if 'left hip socket' in coords and 'left knee' in coords:
+        cv2.line(img, coords['left hip socket'], coords['left knee'], (255, 255, 255), line_weight)
+    if 'left hip socket' in coords and 'hip' in coords:
+        cv2.line(img, coords['left hip socket'], coords['hip'], (255, 255, 255), line_weight)
+    if 'right hip socket' in coords and 'right knee' in coords:
+        cv2.line(img, coords['right hip socket'], coords['right knee'], (255, 255, 255), line_weight)
+    if 'right hip socket' in coords and 'hip' in coords:
+        cv2.line(img, coords['right hip socket'], coords['hip'], (255, 255, 255), line_weight)
+    if 'hip' in coords and 'spine' in coords:
+        cv2.line(img, coords['hip'], coords['spine'], (255, 255, 255), line_weight)
+
+    # Draw the joints
+    for label, (x, y) in coords.items():
+        color = color_map.get(label, (255, 255, 255))  # Default to white if label is not found
+        cv2.circle(img, (x, y), point_size, color, -1)
+
+    return img
+
+
 # Ensure the output directories exist
 image_output_dir = './leg-hip-annotations/target'
 stick_figure_output_dir = './leg-hip-annotations/source'
+stick_figure_original_output_dir = './stick_figures_original'
 os.makedirs(image_output_dir, exist_ok=True)
 os.makedirs(stick_figure_output_dir, exist_ok=True)
+os.makedirs(stick_figure_original_output_dir, exist_ok=True)
 
+# Initialize JSON list
+json_list = []
 
 # Process all images
 images_dir = './original_images'
 for file in os.listdir(images_dir):
-    if file.endswith('.jpg'):
+    if file.endswith('.jpg') or file.endswith('.png'):
         image_path = os.path.join(images_dir, file)
         annotations = df[df['file'] == file].copy()
-        process_image(image_path, annotations, image_output_dir, stick_figure_output_dir)
-
-def remove_non_matching_images(directory, expected_width, expected_height):
-    """
-    Removes images in the specified directory that do not have the expected dimensions.
-    """
-    for file in os.listdir(directory):
-        if file.endswith('.jpg') or file.endswith('.png'):
-            image_path = os.path.join(directory, file)
-            image = cv2.imread(image_path)
-            if image is None:
-                print(f"Could not read {image_path}, skipping.")
-                continue
-            height, width = image.shape[:2]
-            if (width, height) != (expected_width, expected_height):
-                os.remove(image_path)
-                print(f"Removed {image_path} with dimensions ({width}, {height})")
-
-# Directories to check
-image_output_dir = './leg-hip-annotations/target'
-stick_figure_output_dir = './leg-hip-annotations/source'
-
-# Expected dimensions
-expected_width = 454
-expected_height = 373
-
-# Remove non-matching images in both directories
-remove_non_matching_images(image_output_dir, expected_width, expected_height)
-remove_non_matching_images(stick_figure_output_dir, expected_width, expected_height)
-
-print("Cleanup complete.")
-
-# Directory paths
-image_dir = './leg-hip-annotations/target'
-source_dir = './leg-hip-annotations/source'
-
-# Ensure the source directory exists
-os.makedirs(source_dir, exist_ok=True)
-
-# Initialize a list to hold the JSON objects
-json_list = []
-
-# Iterate through the image directory
-for image_file in os.listdir(image_dir):
-    if image_file.endswith('.png') or image_file.endswith('.jpg'):
-        # Construct the paths for the source and target images
-        source_path = os.path.join(source_dir, image_file)
-        target_path = os.path.join(image_dir, image_file)
+        process_image(image_path, annotations, image_output_dir, stick_figure_output_dir, stick_figure_original_output_dir)
 
         # Create relative paths to drop the './leg-hip-annotations/' prefix
-        relative_source_path = os.path.relpath(source_path, start='./leg-hip-annotations')
-        relative_target_path = os.path.relpath(target_path, start='./leg-hip-annotations')
+        relative_source_path = os.path.relpath(os.path.join(stick_figure_output_dir, file), start='./leg-hip-annotations')
+        relative_target_path = os.path.relpath(os.path.join(image_output_dir, file), start='./leg-hip-annotations')
 
         # Create a dictionary for the JSON object
         json_object = {
@@ -194,10 +222,53 @@ for image_file in os.listdir(image_dir):
         # Add the JSON object to the list
         json_list.append(json_object)
 
-# Save each JSON object on a new line in the file
+
+#Test suite
+def check_square_images(directory):
+    """
+    Check if all images in the given directory are square.
+    Prints out the result for each image.
+    """
+    all_square = True
+
+    for file in os.listdir(directory):
+        if file.endswith('.jpg') or file.endswith('.png'):
+            image_path = os.path.join(directory, file)
+            image = cv2.imread(image_path)
+            height, width = image.shape[:2]
+
+            if (height, width) != (256, 256):
+                all_square = False
+                print(f"Image {file} is not square: {width}x{height}")
+    return all_square
+
+# Define the directories to check
+source_dir = './leg-hip-annotations/source'
+target_dir = './leg-hip-annotations/target'
+
+# Check if all images in the source directory are square
+print("Checking source directory...")
+source_all_square = check_square_images(source_dir)
+
+# Check if all images in the target directory are square
+print("\nChecking target directory...")
+target_all_square = check_square_images(target_dir)
+
+# Overall result
+if source_all_square and target_all_square:
+    print("\nAll images in both source and target directories are (256, 256)")
+else:
+    print("\nNot all images in the source and/or target directories are square.")
+
+
+# Convert the list to a JSON formatted string
+json_output = json.dumps(json_list, indent=4)
+
+# Save the JSON formatted string to a file
 output_file = './leg-hip-annotations/prompt.json'
 with open(output_file, 'w') as f:
     for json_object in json_list:
-        f.write(json.dumps(json_object) + '\n')
+        json.dump(json_object, f)
+        f.write('\n')
 
 print(f"JSON output saved to {output_file}")
