@@ -58,44 +58,12 @@ def draw_stick_figure(image, df):
 
     return img
 
-# Directory containing the images
-image_dir = './leg-hip-annotations/target'
-output_dir = './leg-hip-annotations/source'
-
-# Create output directory if it doesn't exist
-os.makedirs(output_dir, exist_ok=True)
-
-# Process each image in the directory
-for image_file in os.listdir(image_dir):
-    if image_file.endswith('.png') or image_file.endswith('.jpg'):
-        image_path = os.path.join(image_dir, image_file)
-        print(f"Processing file: {image_path}")  # Debugging line
-        image = cv2.imread(image_path)
-        
-        if image is None:
-            print(f"Failed to read image: {image_path}")  # Debugging line
-            continue
-        
-        # Filter the DataFrame for the current image file
-        df_image = df[df['file'] == image_file]
-        
-        if df_image.empty:
-            print(f"No matching entries found in CSV for: {image_file}")  # Debugging line
-            continue
-        
-        # Convert image to RGB (OpenCV loads images in BGR by default)
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Draw the stick figure on the image
-        stick_figure_image = draw_stick_figure(image_rgb, df_image)
-        
-        # Save the result
-        output_path = os.path.join(output_dir, image_file)
-        cv2.imwrite(output_path, cv2.cvtColor(stick_figure_image, cv2.COLOR_RGB2BGR))
-
 # Directory paths
 image_dir = './leg-hip-annotations/target'
 source_dir = './leg-hip-annotations/source'
+
+# Ensure the source directory exists
+os.makedirs(source_dir, exist_ok=True)
 
 # Initialize a list to hold the JSON objects
 json_list = []
@@ -121,12 +89,10 @@ for image_file in os.listdir(image_dir):
         # Add the JSON object to the list
         json_list.append(json_object)
 
-# Convert the list to a JSON formatted string
-json_output = json.dumps(json_list, indent=4)
-
-# Save the JSON formatted string to a file
+# Save each JSON object on a new line in the file
 output_file = './leg-hip-annotations/prompt.json'
 with open(output_file, 'w') as f:
-    f.write(json_output)
+    for json_object in json_list:
+        f.write(json.dumps(json_object) + '\n')
 
 print(f"JSON output saved to {output_file}")
