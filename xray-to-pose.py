@@ -119,19 +119,49 @@ def draw_stick_figure(image, df):
     return img
 
 # Ensure the output directories exist
-image_output_dir = './leg-hip-annotations/new_images'
-stick_figure_output_dir = './leg-hip-annotations/new_stick_figures'
+image_output_dir = './leg-hip-annotations/target'
+stick_figure_output_dir = './leg-hip-annotations/source'
 os.makedirs(image_output_dir, exist_ok=True)
 os.makedirs(stick_figure_output_dir, exist_ok=True)
 
+
 # Process all images
-images_dir = './leg-hip-annotations/target'
+images_dir = './original_images'
 for file in os.listdir(images_dir):
     if file.endswith('.jpg'):
         image_path = os.path.join(images_dir, file)
         annotations = df[df['file'] == file].copy()
         process_image(image_path, annotations, image_output_dir, stick_figure_output_dir)
 
+def remove_non_matching_images(directory, expected_width, expected_height):
+    """
+    Removes images in the specified directory that do not have the expected dimensions.
+    """
+    for file in os.listdir(directory):
+        if file.endswith('.jpg') or file.endswith('.png'):
+            image_path = os.path.join(directory, file)
+            image = cv2.imread(image_path)
+            if image is None:
+                print(f"Could not read {image_path}, skipping.")
+                continue
+            height, width = image.shape[:2]
+            if (width, height) != (expected_width, expected_height):
+                os.remove(image_path)
+                print(f"Removed {image_path} with dimensions ({width}, {height})")
+
+# Directories to check
+image_output_dir = './leg-hip-annotations/target'
+stick_figure_output_dir = './leg-hip-annotations/source'
+
+# Expected dimensions
+expected_width = 454
+expected_height = 373
+
+# Remove non-matching images in both directories
+remove_non_matching_images(image_output_dir, expected_width, expected_height)
+remove_non_matching_images(stick_figure_output_dir, expected_width, expected_height)
+
+print("Cleanup complete.")
 
 # Directory paths
 image_dir = './leg-hip-annotations/target'
