@@ -141,19 +141,19 @@ def process_image(image_path, annotations, image_output_dir, stick_figure_output
         cv2.imwrite(stick_figure_image_rotated_path, stick_figure_image_rotated)
 
         # # Apply motion blur
-        # kernel_size = 15
-        # kernel_motion_blur = np.zeros((kernel_size, kernel_size))
-        # kernel_motion_blur[int((kernel_size-1)/2), :] = np.ones(kernel_size)
-        # kernel_motion_blur = kernel_motion_blur / kernel_size
+        kernel_size = 15
+        kernel_motion_blur = np.zeros((kernel_size, kernel_size))
+        kernel_motion_blur[int((kernel_size-1)/2), :] = np.ones(kernel_size)
+        kernel_motion_blur = kernel_motion_blur / kernel_size
 
-        # stick_figure_image_blurred = cv2.filter2D(stick_figure_image_rotated, -1, kernel_motion_blur)
+        stick_figure_image_blurred = cv2.filter2D(stick_figure_image_rotated, -1, kernel_motion_blur)
 
-        # # Save blurred images
-        # processed_image_blurred_path = os.path.join(image_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}_blur.jpg")
-        # stick_figure_image_blurred_path = os.path.join(stick_figure_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}_blur.jpg")
-        # # blurred posemap should still map to same image
-        # cv2.imwrite(processed_image_blurred_path, image_rotated)
-        # cv2.imwrite(stick_figure_image_blurred_path, stick_figure_image_blurred)
+        # Save blurred images
+        processed_image_blurred_path = os.path.join(image_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}_blur.jpg")
+        stick_figure_image_blurred_path = os.path.join(stick_figure_output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_rot{angle}_blur.jpg")
+        # blurred posemap should still map to same image
+        cv2.imwrite(processed_image_blurred_path, image_rotated)
+        cv2.imwrite(stick_figure_image_blurred_path, stick_figure_image_blurred)
 
 def draw_stick_figure(image, df):
     # Create a black image with the same dimensions as the original image
@@ -275,10 +275,7 @@ def count_images(directory):
 json_list = []
 
 prompts = [
-    "an x-ray of the legs and hips from the frontal perspective",
-    "an x-ray of the hips and legs from the frontal perspective",
-    "an x-ray of the hips and legs from the front view",
-    "x-ray of hips and legs from front perspective"
+    "an x-ray of the legs and hips from the frontal perspective"
 ]
 
 # Process all images in the original_images directory
